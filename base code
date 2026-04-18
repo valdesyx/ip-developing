@@ -1,0 +1,90 @@
+import tkinter as tk
+import requests
+import os
+import time
+from datetime import datetime
+
+log_history = []
+last_ip = None
+
+def get_ip():
+    try:
+        return requests.get("https://api.ipify.org", timeout=5).text
+    except:
+        return "offline"
+
+def vpn_running():
+    tasks = os.popen("tasklist").read().lower()
+    return ("proton" in tasks or "openvpn" in tasks or "wireguard" in tasks)
+
+def add_log(message):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    entry = f"[{timestamp}] {message}"
+    log_history.append(entry)
+
+    if len(log_history) > 10:
+        log_history.pop(0)
+
+    log_box.delete(0, tk.END)
+    for item in log_history:
+        log_box.insert(tk.END, item)
+
+def refresh():
+    global last_ip
+
+    ip = get_ip()
+    vpn = vpn_running()
+
+    ip_label.config(text=f"IP: {ip}")
+
+    # VPN status
+    if vpn:
+        vpn_label.config(text="VPN: ACTIVE ✔", fg="green")
+    else:
+        vpn_label.config(text="VPN: OFF ❌", fg="red")
+
+    # IP change tracking
+    if last_ip is None:
+        last_ip = ip
+        add_log(f"Initial IP detected: {ip}")
+
+    elif ip != last_ip:
+        add_log(f"IP CHANGED: {last_ip} → {ip}")
+        last_ip = ip
+    else:
+        add_log("IP unchanged")
+
+    # Flag warning
+    if not vpn:
+        status_label.config(text="WARNING: VPN not detected", fg="orange")
+    elif ip == last_ip:
+        status_label.config(text="VPN active, IP stable", fg="blue")
+    else:
+        status_label.config(text="Network OK", fg="green")
+
+    root.after(4000, refresh)
+
+def manual_log():
+    add_log("Manual refresh triggered")
+
+root = tk.Tk()
+root.title("Network Monitor")
+root.geometry("420x350")
+
+ip_label = tk.Label(root, text="IP: ...")
+ip_label.pack(pady=5)
+
+vpn_label = tk.Label(root, text="VPN: checking...")
+vpn_label.pack(pady=5)
+
+status_label = tk.Label(root, text="Status...")
+status_label.pack(pady=5)
+
+refresh_btn = tk.Button(root, text="Refresh Log", command=manual_log)
+refresh_btn.pack(pady=5)
+
+log_box = tk.Listbox(root, width=60, height=10)
+log_box.pack(pady=10)
+
+refresh()
+root.mainloop()
